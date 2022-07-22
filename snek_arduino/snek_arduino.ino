@@ -2,9 +2,6 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-
 #define GAME_AREA_WIDTH 94
 #define GAME_AREA_HEIGHT 62
 
@@ -12,7 +9,7 @@
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3D ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 display(128, 64, &Wire, OLED_RESET);
 
 static const unsigned char PROGMEM sidegraphics_bmp[] = {
 0x00, 0x7f, 0xfc, 0x00, 0x07, 0xc2, 0x07, 0x00, 0x0c, 0x02, 0x01, 0x80, 0x18, 0x02, 0x00, 0xc0, 
@@ -29,41 +26,34 @@ static const unsigned char PROGMEM sidegraphics_bmp[] = {
 0x00, 0x03, 0x00, 0x3c, 0x00, 0x01, 0x00, 0xc0, 0x00, 0x01, 0x81, 0x00
 };
 
-byte food_score = 0;
-byte food[2];
+byte score;
+byte food[2]; // {x,y} coordinates
 
-byte snake_head[2] = {45,31};
-char snake_direction = 'L';
+byte snake_head[2];  // {x,y} coordinates
+char snake_direction;
+
 byte tail_length = 2;
 byte snake_tail[TAIL_ARRAY_LENGTH][2];
-char input = "X";
+
+bool alive = true;
 
 void setup() {
-  
- Serial.begin(9600);
+  randomSeed(analogRead(0));
+  Serial.begin(9600);
  
   pinMode(2, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(2), change_dir_ld, FALLING);
-  Serial.print("Pin ");
-  Serial.print(2);
-  Serial.print(" , interrupt ");
-  Serial.println(digitalPinToInterrupt(2));
-  
   pinMode(3, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(3), change_dir_ru, FALLING);
-  Serial.print("Pin ");
-  Serial.print(3);
-  Serial.print(" , interrupt ");
-  Serial.println(digitalPinToInterrupt(3));
-  
+
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
     }
 
   welcomescreen();
-  // Set up game graphics
   
+  // Set up game board
   display.drawBitmap(99, 17, sidegraphics_bmp, 32, 64, 1);
   display.drawRect(0, 0, 96, 64, SSD1306_WHITE);
   display.setTextSize(1);
@@ -73,80 +63,84 @@ void setup() {
   // Set up score print parameters
   display.setTextSize(1);
   display.setCursor(97,57);
-  
   display.print(0);
   display.setCursor(97,57);
+
   display.display();
+
+  // Initialize game data
+  snake_head[0] = 47; // Close to center
+  snake_head[1] = 31; // Close to center
+  score = 0;
+
+  char start_directions[] = "LRDU";
+  snake_direction = start_directions[random(0,3)];
   
-  snake_head[0] = 43;
-  snake_head[1] = 33;
-  food_score = 0;
   newfood();
+
+  while(alive == true){
+
+    // Serial.println("Loooop!");
+    
+    move_snake();
+    
+    if(snake_head[0] < 1){
+      alive = false;
+      }
+    if(snake_head[1] < 1){
+      alive = false;
+      }
+    if(snake_head[0] > GAME_AREA_WIDTH){
+      alive = false;
+      }
+    if(snake_head[1] > GAME_AREA_HEIGHT){
+      alive = false;
+      }
+    
+    if(snake_head[0] == food[0] && snake_head[1] == food[1]){
+      eatfood();
+      newfood();    
+    }
+      
+  delay(100);
+  }
+  
+  gameover(); 
+  // End of program execution
 }
   
 void loop() {
-
-  Serial.println("Loooop!");
-
-
-  // draw_snake(snake_head, snake_tail, tail_length);
-  delay(100);
-  move_snake(snake_direction, snake_head, snake_tail, tail_length);
-  if(snake_head[0] < 1){
-    gameover(food_score);
-    }
-  if(snake_head[1] < 1){
-    gameover(food_score);
-    }
-  if(snake_head[0] > GAME_AREA_WIDTH){
-    gameover(food_score);
-    }
-  if(snake_head[1] > GAME_AREA_HEIGHT){
-    gameover(food_score);
-    }
-  if(snake_head[0] == food[0] && snake_head[1] == food[1] )
-  {
-    food_score = eatfood(food, food_score);
-    newfood();
-    }
-
-  delay(100);
   
-
-
 }
 
 void newfood() {
-    
-    food[0] = random(2, (GAME_AREA_WIDTH / 2)) * 2 + 1;
-    food[1] = random(2, (GAME_AREA_HEIGHT / 2)) * 2 + 1;
-    Serial.print(food[0]);
-    Serial.print(", ");
-    Serial.println(food[1]);
-    
-    display.fillRect(food[0], food[1], 2, 2, SSD1306_WHITE);
-    display.display();
-    
- }
+  food[0] = random(0, (GAME_AREA_WIDTH / 2)) * 2 - 1 ;  // random even number inside the game board
+  food[1] = random(0, (GAME_AREA_HEIGHT / 2)) * 2 - 1;
+  Serial.print(food[0]);
+  Serial.print(", ");
+  Serial.println(food[1]);
+  
+  display.fillRect(food[0], food[1], 2, 2, SSD1306_WHITE);
+  display.display();
+}
 
- byte eatfood(byte food[], byte food_score) {
-    Serial.print("Food eaten at ");
-    Serial.print(food[0]);
-    Serial.print(", ");
-    Serial.println(food[1]);
-    
-    food_score++;
-    Serial.print("Food score ");
-    Serial.println(food_score);
-    
-    display.print(food_score);
-    display.display();
-    display.setCursor(97,57);
-    return food_score;
 
- }
+void eatfood() {
+  Serial.print("Food eaten at ");
+  Serial.print(food[0]);
+  Serial.print(", ");
+  Serial.println(food[1]);
+  
+  score++;
+  Serial.print("Food score ");
+  Serial.println(score);
+  
+  display.print(score);
+  display.display();
+  display.setCursor(97,57);
+}
 
- void move_snake(char snake_direction, byte snake_head[], byte snake_tail[TAIL_ARRAY_LENGTH][2], byte tail_length) {
+ void move_snake() {
 
     display.fillRect(snake_head[0], snake_head[1], 2, 2, SSD1306_BLACK);
     Serial.print(snake_head[0]);
@@ -193,9 +187,9 @@ void newfood() {
     display.fillRect(snake_head[0], snake_head[1], 2, 2, SSD1306_WHITE);
     
     display.display();
- }
+}
 
-void draw_snake(byte snake_head[], byte snake_tail[TAIL_ARRAY_LENGTH][2], byte tail_length) {
+void draw_snake() {
 
     Serial.print(snake_head[0]);
     Serial.print(", ");
@@ -211,36 +205,37 @@ void draw_snake(byte snake_head[], byte snake_tail[TAIL_ARRAY_LENGTH][2], byte t
     display.display();
 }
 
-void change_dir_ld(){
-  
+void change_dir_ld()
+{
+  // Software debounce
   static unsigned long last_interrupt_time = 0;
   unsigned long interrupt_time = millis();
-  // If interrupts come faster than 200ms, assume it's a bounce and ignore
-  if (interrupt_time - last_interrupt_time > 200) 
+  if (interrupt_time - last_interrupt_time > 200)
   {
-  Serial.println("L D Button");
-  Serial.println(snake_direction);
-    if (snake_direction == 'L'){
-      snake_direction = 'D';
-      }
-    else if (snake_direction == 'D'){
-      snake_direction = 'L';
+    switch(snake_direction)
+    {
+      case 'L':
+        snake_direction = 'D';
+        break;
+      case 'D':
+        snake_direction = 'L';
+        break;
+      case 'U':
+        snake_direction = 'L';
+        break;
+      case 'R':
+        snake_direction = 'D';
+        break;
     }
-    else if (snake_direction == 'U'){
-      snake_direction = 'L';
-    }
-    else if (snake_direction == 'R'){
-      snake_direction = 'D';
-    }
+    last_interrupt_time = interrupt_time;
   }
-  last_interrupt_time = interrupt_time;
-  }
+}
 
-void change_dir_ru(){
-  
+void change_dir_ru()
+{
+  // Software debounce
   static unsigned long last_interrupt_time = 0;
   unsigned long interrupt_time = millis();
-  // If interrupts come faster than 200ms, assume it's a bounce and ignore
   if (interrupt_time - last_interrupt_time > 200)
   {
     Serial.println("R U Button");
@@ -258,44 +253,55 @@ void change_dir_ru(){
     }
   }
   last_interrupt_time = interrupt_time;
-  }
-
-void gameover(int food_score) {
-  
-  byte cursorposition = 64;
-  
-  display.clearDisplay(); 
-  display.setTextSize(2); // Draw 2X-scale text
-  display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
-  display.setCursor(10,cursorposition);
-  
-  for(byte i = 0; i < 46; i++) {
-    display.println("GAME OVER");
-    display.display();
-    delay(10);
-    display.setCursor(10,cursorposition);
-    cursorposition--;
-    }
-
-   display.setTextSize(1); // Draw 2X-scale text
-   display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
-   display.setCursor(40,42);
-   display.print(food_score);
-   display.println(" points!");
-   display.display();
-   delay(1000);
-   setup();
-   
 }
 
+
 void welcomescreen(){
+
+  // Set up text mode
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
   display.setTextSize(3);
   display.setCursor(20,10);
+
+  // Display splash screen
   display.print("SNEK!");
   display.display();
-  delay(500);
+  delay(1000);
+
+  // Clear display
   display.clearDisplay();
   display.display();
+}
+
+
+void gameover() {
+
+  // Set up text mode
+  byte cursorposition = 64;
+  display.clearDisplay(); 
+  display.setTextSize(2); // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+  display.setCursor(10,cursorposition);
+
+  //Animate GAME OVER
+  for(byte i = 0; i < 46; i++) {
+    display.println("GAME OVER");
+    display.display();
+    delay(20);
+    display.setCursor(10,cursorposition);
+    cursorposition--;
+    }
+
+  // Set up text mode
+  display.setTextSize(1); // Draw 2X-scale text
+  display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+  display.setCursor(40,42);
+
+  // Display final score
+  display.print(score);
+  display.println(" points!");
+  display.display();
+
+  // End of program execution
 }
