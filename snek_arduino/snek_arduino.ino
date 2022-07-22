@@ -5,7 +5,11 @@
 #define GAME_AREA_WIDTH 94
 #define GAME_AREA_HEIGHT 62
 
-#define TAIL_ARRAY_LENGTH 10
+#define HEAD_START_X 47
+#define HEAD_START_Y 31
+
+
+#define TAIL_ARRAY_LENGTH 100
 
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3D ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
@@ -29,10 +33,11 @@ static const unsigned char PROGMEM sidegraphics_bmp[] = {
 byte score;
 byte food[2]; // {x,y} coordinates
 
-byte snake_head[2];  // {x,y} coordinates
+byte snake_head[2]; // {x,y} coordinates
 char snake_direction;
 
-byte tail_length = 2;
+byte tail_length = 3;
+//byte snake_tail[TAIL_ARRAY_LENGTH][2] = {{HEAD_START_X,HEAD_START_Y+2},{HEAD_START_X,HEAD_START_Y+4},{HEAD_START_X,HEAD_START_Y+6},{},{},{},{},{},{}};
 byte snake_tail[TAIL_ARRAY_LENGTH][2];
 
 bool alive = true;
@@ -69,12 +74,12 @@ void setup() {
   display.display();
 
   // Initialize game data
-  snake_head[0] = 47; // Close to center
-  snake_head[1] = 31; // Close to center
+  snake_head[0] = HEAD_START_X; // Close to center
+  snake_head[1] = HEAD_START_Y; // Close to center
   score = 0;
 
-  char start_directions[] = "LRDU";
-  snake_direction = start_directions[random(0,3)];
+  char start_directions[] = "LRU";
+  snake_direction = start_directions[random(0,2)];
   
   newfood();
 
@@ -90,16 +95,29 @@ void setup() {
     if(snake_head[1] < 1){
       alive = false;
       }
-    if(snake_head[0] > GAME_AREA_WIDTH){
+    if(snake_head[0] > GAME_AREA_WIDTH-2){
       alive = false;
       }
-    if(snake_head[1] > GAME_AREA_HEIGHT){
+    if(snake_head[1] > GAME_AREA_HEIGHT-2){
       alive = false;
       }
+
+    for(int i = 0; i < TAIL_ARRAY_LENGTH; i++){
+      // Serial.println("Checking tail position " + String(snake_tail[i][0]) + ", " + String(snake_tail[i][1]));
+      if(snake_tail[i][0] == snake_head[0] && snake_tail[i][1] == snake_head[1]){
+        Serial.println("Death by collision at " + String(snake_head[0]) + ", "  + String(snake_head[1]));
+        alive = false;
+      }
+    }
     
     if(snake_head[0] == food[0] && snake_head[1] == food[1]){
       eatfood();
-      newfood();    
+      newfood();
+      for(int i = 0; i < TAIL_ARRAY_LENGTH; i++){
+        if(snake_tail[i][0] == food[0] && snake_tail[i][1] == food[1]){
+          newfood();
+        }
+      }
     }
       
   delay(100);
@@ -132,6 +150,7 @@ void eatfood() {
   Serial.println(food[1]);
   
   score++;
+  tail_length += 3;
   Serial.print("Food score ");
   Serial.println(score);
   
@@ -142,28 +161,36 @@ void eatfood() {
 
  void move_snake() {
 
-    display.fillRect(snake_head[0], snake_head[1], 2, 2, SSD1306_BLACK);
     Serial.print(snake_head[0]);
     Serial.print(" head ");
     Serial.println(snake_head[1]);
-    // move all tail elements back one step
-//    for(int i = TAIL_ARRAY_LENGTH; i >= 1; i--){
+    
+     //move all tail elements back one step
+    for(int i = TAIL_ARRAY_LENGTH - 1; i >= 0; i--){
 //      Serial.print(i);
 //      Serial.print(": ");
 //      Serial.print(snake_tail[i][0]);
 //      Serial.print(", ");
 //      Serial.println(snake_tail[i][1]);
-//      snake_tail[i][0] = snake_tail[i-1][0];
-//      snake_tail[i][1] = snake_tail[i-1][1];
-//      display.fillRect(snake_tail[i][0], snake_tail[i][1], 2, 2, SSD1306_WHITE);
-//      }
-
+      snake_tail[i][0] = snake_tail[i-1][0];
+      snake_tail[i][1] = snake_tail[i-1][1];
+      if(i >= tail_length && snake_tail[i][0] > 0 && snake_tail[i][1] > 0){
+        display.fillRect(snake_tail[i][0], snake_tail[i][1], 2, 2, SSD1306_BLACK);
+        snake_tail[i][0] = 0;
+        snake_tail[i][1] = 0;
+      }
+      else if(snake_tail[i][0] > 0 && snake_tail[i][1] > 0){
+        display.fillRect(snake_tail[i][0], snake_tail[i][1], 2, 2, SSD1306_WHITE);
+      }
+      
+    }
     
- 
+       
     // make the head position part of the tail
     snake_tail[0][0] = snake_head[0];
     snake_tail[0][1] = snake_head[1];
 
+    display.fillRect(snake_tail[0][0], snake_tail[0][1], 2, 2, SSD1306_WHITE);
 
     // move the head
     byte xpos = snake_head[0]; 
@@ -181,6 +208,7 @@ void eatfood() {
     if(snake_direction == 'D'){
         ypos += 2;
     }
+    
     snake_head[0] = xpos;
     snake_head[1] = ypos;
 
