@@ -37,7 +37,6 @@ byte snake_head[2]; // {x,y} coordinates
 char snake_direction;
 
 byte tail_length = 3;
-//byte snake_tail[TAIL_ARRAY_LENGTH][2] = {{HEAD_START_X,HEAD_START_Y+2},{HEAD_START_X,HEAD_START_Y+4},{HEAD_START_X,HEAD_START_Y+6},{},{},{},{},{},{}};
 byte snake_tail[TAIL_ARRAY_LENGTH][2];
 
 bool alive = true;
@@ -238,7 +237,7 @@ void change_dir_ld()
   // Software debounce
   static unsigned long last_interrupt_time = 0;
   unsigned long interrupt_time = millis();
-  if (interrupt_time - last_interrupt_time > 200)
+  if (interrupt_time - last_interrupt_time > 50)
   {
     switch(snake_direction)
     {
@@ -264,7 +263,7 @@ void change_dir_ru()
   // Software debounce
   static unsigned long last_interrupt_time = 0;
   unsigned long interrupt_time = millis();
-  if (interrupt_time - last_interrupt_time > 200)
+  if (interrupt_time - last_interrupt_time > 50)
   {
     Serial.println("R U Button");
     if (snake_direction == 'R'){
