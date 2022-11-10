@@ -28,7 +28,7 @@ def eatfood(screen, food):
 
 
 def move_snake(snake_direction, snake_head, snake_tail):
-    '''Move coordinates of snake one pixel.'''
+    '''Move coordinates of snake one step.'''
     snake_tail.append(snake_head)
     xpos = snake_head['x']
     ypos = snake_head['y']
